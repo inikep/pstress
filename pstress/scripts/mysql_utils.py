@@ -52,6 +52,9 @@ def start_mysqld(mysqld_path, basedir, data_dir, port, err_log, params):
 
     params_list = shlex.split(params) if params else []
 
+    with open(err_log, "w"):
+        pass  # truncate file automatically
+
     proc = subprocess.Popen(
         [
         mysqld_path,
