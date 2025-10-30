@@ -44,6 +44,7 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1", help="MySQL base directory")
     parser.add_argument("--input-file", required=True, help="Path to text file with mysql options")
     parser.add_argument("--init", action="store_true", help="Create a new datadir (default: False)")
+    parser.add_argument("--gdb", action="store_true", help="Create a new datadir (default: False)")
 
     args = parser.parse_args()
 
@@ -68,7 +69,7 @@ if __name__ == "__main__":
 
             try:
                 copy_datadir(args.datadir, temp_datadir)
-                proc = start_mysqld(mysqld_path, args.basedir, temp_datadir, args.port, err_log, commands)
+                proc = start_mysqld(mysqld_path, args.basedir, temp_datadir, args.port, err_log, commands, args.gdb)
 
                 #wait_for_mysql(args.basedir, args.port)
                 wait_for_mysql_or_crash(args.basedir, args.port, err_log)
@@ -100,4 +101,4 @@ if __name__ == "__main__":
                 stop_mysqld(proc)
                 filter_log_file(err_log, outfile)
                 outfile.flush()
-                os.remove(err_log)
+                #os.remove(err_log)

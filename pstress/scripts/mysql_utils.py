@@ -47,7 +47,7 @@ def copy_datadir(src_dir, dest_dir):
     shutil.copytree(src_dir, dest_dir, symlinks=True)
     print("[INFO] Datadir copy complete.")
 
-def start_mysqld(mysqld_path, basedir, data_dir, port, err_log, params):
+def start_mysqld(mysqld_path, basedir, data_dir, port, err_log, params, gdb):
     """Start mysqld with RocksDB enabled, redirect logs to file."""
 
     params_list = shlex.split(params) if params else []
@@ -55,8 +55,7 @@ def start_mysqld(mysqld_path, basedir, data_dir, port, err_log, params):
     with open(err_log, "w"):
         pass  # truncate file automatically
 
-    proc = subprocess.Popen(
-        [
+    mysqld_cmd = [
         mysqld_path,
         f"--datadir={data_dir}",
         f"--basedir={basedir}",
@@ -64,10 +63,24 @@ def start_mysqld(mysqld_path, basedir, data_dir, port, err_log, params):
         "--skip-networking=0",
         "--socket=mysql.sock",
         "--plugin-load-add=RocksDB=ha_rocksdb.so",
+        "--log-error-verbosity=3",
         f"--log-error={err_log}",
         "--rocksdb"
-        ] + params_list
-    )
+    ] + params_list
+
+    # Convert to a shell-safe command string for gdb
+    cmd_str = " ".join(shlex.quote(arg) for arg in mysqld_cmd)
+
+    # Launch GNOME Terminal with gdb attached
+    if gdb:
+        proc = subprocess.Popen([
+            "gnome-terminal",
+            "--",
+            "bash", "-c",
+            f"gdb -ex 'set pagination off' -ex run --args {cmd_str}; exec bash"
+        ])
+    else:
+        proc = subprocess.Popen(mysqld_cmd)
 
     print(f"[INFO] mysqld started with params={params}")
     print(f"[INFO] mysqld started with RocksDB enabled (pid={proc.pid}), logs -> {err_log}")
@@ -181,7 +194,7 @@ def open_mysql_connection(host="127.0.0.1", port=3306, user="root", password="",
 def execute_query(conn, query, params=None):
     """
     Execute a SQL query on the given connection.
-    Returns fetched results for SELECT, otherwise returns affected row count.
+    Returns fetched results for queries that return rows, otherwise returns affected row count.
     """
     if conn is None or not conn.is_connected():
         raise RuntimeError("MySQL connection is not open.")
@@ -189,7 +202,8 @@ def execute_query(conn, query, params=None):
     cursor = conn.cursor()
     try:
         cursor.execute(query, params or ())
-        if query.strip().lower().startswith("select"):
+        # Queries that return results
+        if query.strip().lower().startswith(("select", "show", "describe", "explain")):
             result = cursor.fetchall()
         else:
             conn.commit()
